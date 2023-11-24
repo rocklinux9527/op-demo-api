@@ -1,6 +1,8 @@
 pipeline {
-    kubernetes {
-        label "${JOB_NAME}"
+     agent {
+        kubernetes {
+            label "${JOB_NAME}"
+        }
     }
     environment {
         KUBE_CONTEXT = 'kubernetes'
