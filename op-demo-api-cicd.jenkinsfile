@@ -1,4 +1,9 @@
 pipeline {
+      options {
+     podTemplate('kaniko', containers: [
+     containerTemplate(name: 'kaniko', image: 'gcr.io/kaniko-project/executor:v1.6.0', command: '', ttyEnabled: true),
+    ])
+     }
      agent {
         kubernetes {
             inheritFrom  "${JOB_NAME}"
@@ -34,9 +39,14 @@ pipeline {
                 script {
                     // 使用withDockerRegistry步骤包装docker构建和推送
                     sh 'echo "admin" | docker login -u "admin" --password-stdin harbor.k8s.com'
-                   sh "docker build -t ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER} ."
-                   sh "docker push ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}"
-                }
+                   // sh "docker build -t ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER} ."
+                   //sh "docker push ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}"
+                     // 使用 Kaniko 步骤进行构建
+                    container('kaniko') {
+                        sh "echo \"admin\" | docker login -u \"admin\" --password-stdin harbor.k8s.com"
+                        sh "kaniko --context ${WORKSPACE} --dockerfile ${WORKSPACE}/Dockerfile --destination ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}"
+                    }
+                   }
             }
         }
         
