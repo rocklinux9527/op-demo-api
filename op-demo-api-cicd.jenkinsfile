@@ -1,12 +1,11 @@
 pipeline {
-      options {
-     podTemplate('kaniko', containers: [
-     containerTemplate(name: 'kaniko', image: 'gcr.io/kaniko-project/executor:v1.6.0', command: '', ttyEnabled: true),
-    ])
-     }
      agent {
         kubernetes {
-            inheritFrom  "${JOB_NAME}"
+            inheritFrom "${JOB_NAME}"
+            additionalContainers [
+                containerTemplate(name: 'docker', image: 'docker:20.10.11', command: 'cat', ttyEnabled: true),
+                containerTemplate(name: 'kaniko', image: 'gcr.io/kaniko-project/executor:v1.6.0', command: '', ttyEnabled: true),
+            ]
         }
     }
     environment {
