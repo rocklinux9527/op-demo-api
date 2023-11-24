@@ -29,9 +29,11 @@ pipeline {
             steps {
                 script {
                     // 使用withDockerRegistry步骤包装docker构建和推送
-                    sh "docker build -t ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER} ."
-                    sh "docker push ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}"
-
+                    sh '''
+                     /kaniko/executor --force --cache=true --cache-dir=/cache -c `pwd` --dockerfile=./Dockerfile --destination=${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}
+                    '''
+                   // sh "docker build -t ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER} ."
+                   // sh "docker push ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}"
                 }
             }
         }
