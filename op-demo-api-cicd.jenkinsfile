@@ -1,7 +1,7 @@
 pipeline {
      agent {
         kubernetes {
-            label "${JOB_NAME}"
+            inheritFrom  "${JOB_NAME}"
         }
     }
     environment {
