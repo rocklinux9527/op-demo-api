@@ -1,5 +1,7 @@
 pipeline {
-    agent any
+    agent {
+        label "${JOB_NAME}"
+    }
     environment {
         KUBE_CONTEXT = 'kubernetes'
         DOCKER_REGISTRY = 'harbor.k8s.com/base'
