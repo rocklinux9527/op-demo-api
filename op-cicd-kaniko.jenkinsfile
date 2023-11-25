@@ -1,0 +1,87 @@
+pipeline {
+    agent {
+        kubernetes {
+            inheritFrom "${JOB_NAME}"
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:v1.6.0-debug
+    imagePullPolicy: Always
+    command:
+    - sleep
+    args:
+    - 99d
+    volumeMounts:
+      - name: jenkins-docker-cfg
+        mountPath: /kaniko/.docker
+  volumes:
+  - name: jenkins-docker-cfg
+    projected:
+      sources:
+      - secret:
+          name: regcred
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+"""
+        }
+    }
+    environment {
+        KUBE_CONTEXT = 'kubernetes'
+        DOCKER_REGISTRY = 'harbor.k8s.com/base'
+        APP_IMAGE_NAME = 'op-demo-app'
+    }
+
+    stages {
+        stage('Generate Timestamp') {
+            steps {
+                script {
+                    def timestamp = new java.text.SimpleDateFormat("yyyyMMddHHmm").format(new Date())
+                    env.TIMESTAMP = timestamp
+                    echo "生成的时间镜像tag戳字符串: ${timestamp}"
+                }
+            }
+        }
+
+        stage('Checkout') {
+            steps {
+                script {
+                    git branch: 'main', url: 'https://github.com/li-zengping/op-demo-api'
+                }
+            }
+        }
+
+        stage('Build with Kaniko') {
+            steps {
+                container('kaniko') {
+                   sh "/kaniko/executor -f ${WORKSPACE}/Dockerfile -c ${WORKSPACE} --insecure --skip-tls-verify --cache=true --destination=${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}"
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                dir('yaml/dev') {
+                    script {
+                        sh """
+                           sed -i 's|image: #appImage#|image: ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}|' ${JOB_NAME}.yaml
+                        """
+                        sh "kubectl apply -f ${JOB_NAME}.yaml -n dev"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Build and deployment successful!'
+        }
+        failure {
+            echo 'Build or deployment failed!'
+        }
+    }
+}
