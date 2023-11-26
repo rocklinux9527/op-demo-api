@@ -1,0 +1,118 @@
+pipeline {
+    agent {
+        kubernetes {
+            inheritFrom "${JOB_NAME}"
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: breaklinux/kaniko-project:executor-debug
+    imagePullPolicy: Always
+    command:
+    - sleep
+    args:
+    - 99d
+    volumeMounts:
+      - name: jenkins-docker-cfg
+        mountPath: /kaniko/.docker
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent
+        readOnly: false
+  - name: jnlp
+    image: breaklinux/jenkins:inbound-agent_3142.vcfca_0cd92128-1
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+    volumeMounts:
+      - mountPath: "/home/jenkins/agent"
+        name: "workspace-volume"
+        readOnly: false
+      - mountPath: "/root/.kube"
+        name: "kube-config-volume"
+        readOnly: true
+      - mountPath: "/bin/kubectl"
+        name: "kubectl-binary-volume"
+        readOnly: true
+  volumes:
+  - name: jenkins-docker-cfg
+    projected:
+      sources:
+      - secret:
+          name: registry-secrete #k8s集群中先创建 secret认证
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+  - name: workspace-volume
+    emptyDir: {}
+  - name: kube-config-volume
+    hostPath:
+      path: /root/.kube
+      type: Directory
+  - name: kubectl-binary-volume
+    hostPath:
+      path: /bin/kubectl
+      type: File
+"""
+      }
+    }
+
+    environment {
+        DOCKER_REGISTRY = 'harbor.k8s.com/base'
+        APP_IMAGE_NAME = 'op-demo-app'
+    }
+
+    stages {
+        stage('Generate Timestamp') {
+            steps {
+                script {
+                    def timestamp = new java.text.SimpleDateFormat("yyyyMMddHHmm").format(new Date())
+                    env.TIMESTAMP = timestamp
+                    echo "生成的时间镜像tag戳字符串: ${timestamp}"
+                }
+            }
+        }
+
+        stage('Checkout') {
+            steps {
+                script {
+                    git branch: 'main', url: 'https://github.com/rocklinux9527/op-demo-api.git'
+                }
+            }
+        }
+
+        stage('Build with Kaniko') {
+           steps {
+               container('kaniko') {
+                  sh "/kaniko/executor -f ${WORKSPACE}/Dockerfile -c ${WORKSPACE} --insecure --skip-tls-verify --cache=true --destination=${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}"
+                }
+            }
+       }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                container('jnlp') {
+                    dir('yaml/dev') {
+                        script {
+                            sh """
+                               sed -i 's|image: #appImage#|image: ${DOCKER_REGISTRY}/${APP_IMAGE_NAME}:${env.TIMESTAMP}_${BUILD_NUMBER}|' ${JOB_NAME}.yaml
+                            """
+                            sh "kubectl apply -f ${JOB_NAME}.yaml -n ops"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Build and deployment successful!'
+        }
+        failure {
+            echo 'Build or deployment failed!'
+        }
+    }
+}
