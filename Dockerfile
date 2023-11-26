@@ -6,7 +6,7 @@ WORKDIR /xiaolige/app/ops-py-flask-api/
 
 #拷贝pip依赖包文件并进行安装
 COPY requirements.txt .
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+RUN pip install -i https://mirrors.cloud.tencent.com/pypi/simple -r requirements.txt
 
 #引入python:3.6.8-alpine3.8 精简版
 FROM python:3.6.8-alpine3.8
