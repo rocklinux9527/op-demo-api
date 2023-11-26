@@ -5,7 +5,6 @@ metadata:
     app: op-demo-app
     env: dev
   name: op-demo-app
-  namespace: dev
 spec:
   progressDeadlineSeconds: 600
   replicas: 2
